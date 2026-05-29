@@ -83,7 +83,7 @@ struct ParseSession: Identifiable, Codable, Equatable {
 extension JSONEncoder {
     static var smartReminders: JSONEncoder {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .secondsSince1970
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return encoder
     }
@@ -92,7 +92,7 @@ extension JSONEncoder {
 extension JSONDecoder {
     static var smartReminders: JSONDecoder {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .secondsSince1970
         return decoder
     }
 }

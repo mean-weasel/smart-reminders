@@ -71,4 +71,35 @@ final class ReminderModelsTests: XCTestCase {
         XCTAssertEqual(session.finalApprovedDraft?.group?.mode, .grouped)
         XCTAssertEqual(session.createdReminderLinks.first?.appleReminderId, "reminder-1")
     }
+
+    func testParseSessionPreservesFractionalSecondDatesWhenEncoded() throws {
+        let sessionID = UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
+        let draftID = UUID(uuidString: "55555555-5555-5555-5555-555555555555")!
+        let session = ParseSession(
+            id: sessionID,
+            originalText: "Call Alex after lunch",
+            createdAt: Date(timeIntervalSince1970: 1_779_999_999.123456),
+            parserVersion: "test-parser",
+            status: .draft,
+            rawParserResponse: nil,
+            finalApprovedDraft: nil,
+            createdReminderLinks: [
+                CreatedReminderLink(
+                    id: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
+                    parseSessionId: sessionID,
+                    reminderDraftId: draftID,
+                    appleCalendarId: "calendar-2",
+                    appleReminderId: "reminder-2",
+                    createdAt: Date(timeIntervalSince1970: 1_779_999_999.654321),
+                    lastKnownTitle: "Call Alex",
+                    lastKnownStatus: .unknown
+                )
+            ]
+        )
+
+        let data = try JSONEncoder.smartReminders.encode(session)
+        let decoded = try JSONDecoder.smartReminders.decode(ParseSession.self, from: data)
+
+        XCTAssertEqual(decoded, session)
+    }
 }
