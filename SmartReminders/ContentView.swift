@@ -11,25 +11,51 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Reminder intent") {
-                    TextEditor(text: $inputText)
-                        .frame(minHeight: 180)
-                        .accessibilityIdentifier("intentTextEditor")
-                }
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Reminder intent")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
 
-                if let errorMessage {
-                    Section {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
+                        TextEditor(text: $inputText)
+                            .padding(12)
+                            .frame(height: 150)
+                            .scrollContentBackground(.hidden)
+                            .background(.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(.quaternary, lineWidth: 1)
+                            }
+                            .accessibilityIdentifier("intentTextEditor")
+
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.callout)
+                                .foregroundStyle(.red)
+                                .accessibilityIdentifier("parseErrorMessage")
+                        }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 16)
                 }
 
-                Button("Parse reminder draft") {
+                Divider()
+
+                Button {
                     parseDraft()
+                } label: {
+                    Text("Parse reminder draft")
+                        .frame(maxWidth: .infinity)
                 }
-                    .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityIdentifier("parseReminderDraftButton")
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("parseReminderDraftButton")
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(.regularMaterial)
             }
             .navigationTitle("Smart Reminders")
             .sheet(item: $reviewViewModel) { viewModel in
