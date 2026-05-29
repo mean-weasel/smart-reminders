@@ -96,4 +96,140 @@ final class DraftValidatorTests: XCTestCase {
             XCTAssertEqual(error as? DraftValidationError, .invalidDueDate("next blursday"))
         }
     }
+
+    func testAcceptsDateOnlyDueDateAtStartOfDay() throws {
+        let response = ParserResponse(
+            parserVersion: "test-parser",
+            reminders: [
+                ParsedReminderDraft(
+                    title: "Make smoothie",
+                    notes: nil,
+                    dueDate: "2026-06-01",
+                    hasTime: false,
+                    recurrence: nil,
+                    priority: "none",
+                    targetList: nil,
+                    labels: [],
+                    confidence: 0.9,
+                    ambiguityFlags: []
+                )
+            ],
+            group: nil,
+            rawJSON: nil
+        )
+
+        let validated = try DraftValidator().validate(response)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let expectedDate = calendar.date(from: DateComponents(year: 2026, month: 6, day: 1))
+        XCTAssertEqual(validated.reminders[0].dueDate, expectedDate)
+        XCTAssertFalse(validated.reminders[0].hasTime)
+    }
+
+    func testAcceptsFractionalSecondDueDate() throws {
+        let response = ParserResponse(
+            parserVersion: "test-parser",
+            reminders: [
+                ParsedReminderDraft(
+                    title: "Make smoothie",
+                    notes: nil,
+                    dueDate: "2026-06-01T08:00:00.123Z",
+                    hasTime: true,
+                    recurrence: nil,
+                    priority: "none",
+                    targetList: nil,
+                    labels: [],
+                    confidence: 0.9,
+                    ambiguityFlags: []
+                )
+            ],
+            group: nil,
+            rawJSON: nil
+        )
+
+        let validated = try DraftValidator().validate(response)
+
+        XCTAssertNotNil(validated.reminders[0].dueDate)
+        XCTAssertTrue(validated.reminders[0].hasTime)
+    }
+
+    func testRejectsUnknownRecurrence() {
+        let response = ParserResponse(
+            parserVersion: "test-parser",
+            reminders: [
+                ParsedReminderDraft(
+                    title: "Make smoothie",
+                    notes: nil,
+                    dueDate: nil,
+                    hasTime: false,
+                    recurrence: "fortnightly",
+                    priority: "none",
+                    targetList: nil,
+                    labels: [],
+                    confidence: 0.9,
+                    ambiguityFlags: []
+                )
+            ],
+            group: nil,
+            rawJSON: nil
+        )
+
+        XCTAssertThrowsError(try DraftValidator().validate(response)) { error in
+            XCTAssertEqual(error as? DraftValidationError, .invalidRecurrence("fortnightly"))
+        }
+    }
+
+    func testRejectsUnknownPriority() {
+        let response = ParserResponse(
+            parserVersion: "test-parser",
+            reminders: [
+                ParsedReminderDraft(
+                    title: "Make smoothie",
+                    notes: nil,
+                    dueDate: nil,
+                    hasTime: false,
+                    recurrence: nil,
+                    priority: "urgent",
+                    targetList: nil,
+                    labels: [],
+                    confidence: 0.9,
+                    ambiguityFlags: []
+                )
+            ],
+            group: nil,
+            rawJSON: nil
+        )
+
+        XCTAssertThrowsError(try DraftValidator().validate(response)) { error in
+            XCTAssertEqual(error as? DraftValidationError, .invalidPriority("urgent"))
+        }
+    }
+
+    func testDropsBlankGroupTitle() throws {
+        let response = ParserResponse(
+            parserVersion: "test-parser",
+            reminders: [
+                ParsedReminderDraft(
+                    title: "Make smoothie",
+                    notes: nil,
+                    dueDate: nil,
+                    hasTime: false,
+                    recurrence: nil,
+                    priority: "none",
+                    targetList: nil,
+                    labels: [],
+                    confidence: 0.9,
+                    ambiguityFlags: []
+                )
+            ],
+            group: ParsedDraftGroup(title: "  ", mode: "grouped"),
+            rawJSON: nil
+        )
+
+        let validated = try DraftValidator().validate(response)
+
+        XCTAssertNil(validated.group)
+        XCTAssertEqual(validated.reminders.count, 1)
+    }
 }

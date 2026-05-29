@@ -4,6 +4,8 @@ enum DraftValidationError: Error, Equatable {
     case emptyReminderList
     case emptyTitle
     case invalidDueDate(String)
+    case invalidRecurrence(String)
+    case invalidPriority(String)
 }
 
 struct ValidatedDraft: Equatable {
@@ -14,7 +16,24 @@ struct ValidatedDraft: Equatable {
 }
 
 struct DraftValidator {
-    private let isoFormatter = ISO8601DateFormatter()
+    private let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+    private let fractionalISOFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private let dateOnlyFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter
+    }()
 
     func validate(_ response: ParserResponse) throws -> ValidatedDraft {
         guard !response.reminders.isEmpty else {
@@ -28,37 +47,52 @@ struct DraftValidator {
                 throw DraftValidationError.emptyTitle
             }
 
-            let dueDate: Date?
+            let parsedDueDate: (date: Date, hasTime: Bool)?
             if let dueDateString = parsed.dueDate {
-                guard let parsedDate = isoFormatter.date(from: dueDateString) else {
+                guard let dueDate = parseDueDate(dueDateString) else {
                     throw DraftValidationError.invalidDueDate(dueDateString)
                 }
-                dueDate = parsedDate
+                parsedDueDate = dueDate
             } else {
-                dueDate = nil
+                parsedDueDate = nil
+            }
+
+            let recurrence: RecurrenceRule?
+            if let recurrenceString = parsed.recurrence?.nilIfBlank {
+                guard let parsedRecurrence = RecurrenceRule(rawValue: recurrenceString) else {
+                    throw DraftValidationError.invalidRecurrence(parsed.recurrence ?? recurrenceString)
+                }
+                recurrence = parsedRecurrence
+            } else {
+                recurrence = nil
+            }
+
+            let priorityString = parsed.priority.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let priority = ReminderPriority(rawValue: priorityString) else {
+                throw DraftValidationError.invalidPriority(parsed.priority)
             }
 
             drafts.append(ReminderDraft(
                 id: UUID(),
                 title: title,
                 notes: parsed.notes?.nilIfBlank,
-                dueDate: dueDate,
-                hasTime: parsed.hasTime && dueDate != nil,
-                recurrence: RecurrenceRule(rawValue: parsed.recurrence ?? ""),
-                priority: ReminderPriority(rawValue: parsed.priority) ?? .none,
+                dueDate: parsedDueDate?.date,
+                hasTime: parsed.hasTime && (parsedDueDate?.hasTime ?? false),
+                recurrence: recurrence,
+                priority: priority,
                 targetList: parsed.targetList?.nilIfBlank,
                 labels: parsed.labels.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty },
                 confidence: min(max(parsed.confidence, 0), 1),
                 ambiguityFlags: parsed.ambiguityFlags,
-                isUndated: dueDate == nil
+                isUndated: parsedDueDate == nil
             ))
         }
 
         let group: DraftGroup?
-        if let parsedGroup = response.group {
+        if let parsedGroup = response.group, let groupTitle = parsedGroup.title.nilIfBlank {
             group = DraftGroup(
                 id: UUID(),
-                title: parsedGroup.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                title: groupTitle,
                 mode: DraftGroupMode(rawValue: parsedGroup.mode) ?? .separate,
                 reminderDraftIds: drafts.map(\.id)
             )
@@ -72,6 +106,22 @@ struct DraftValidator {
             group: group,
             rawParserResponse: response.rawJSON
         )
+    }
+
+    private func parseDueDate(_ dueDateString: String) -> (date: Date, hasTime: Bool)? {
+        if let date = fractionalISOFormatter.date(from: dueDateString) {
+            return (date, true)
+        }
+
+        if let date = isoFormatter.date(from: dueDateString) {
+            return (date, true)
+        }
+
+        if let date = dateOnlyFormatter.date(from: dueDateString) {
+            return (date, false)
+        }
+
+        return nil
     }
 }
 
