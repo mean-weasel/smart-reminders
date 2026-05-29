@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var inputText = ""
+    @State private var inputText = LaunchConfiguration.initialIntentText()
     @State private var reviewViewModel: ReviewViewModel?
     @State private var errorMessage: String?
 
